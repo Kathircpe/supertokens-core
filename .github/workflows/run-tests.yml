@@ -3,6 +3,9 @@ name: Run Core Tests
 on:
   workflow_dispatch:
     inputs:
+      core-branch:
+        description: 'Branch of this repo to run the tests on'
+        required: true
       plugin-interface-branch:
         description: 'plugin-interface branch (default: master)'
         required: false
@@ -11,9 +14,6 @@ on:
         description: 'Optional Gradle test filter, e.g. io.supertokens.test.InMemoryDBTest'
         required: false
         default: ''
-  push:
-    branches:
-      - '**'
 
 concurrency:
   group: run-core-tests-${{ github.ref }}
@@ -40,7 +40,9 @@ jobs:
           ref: master
       - uses: actions/checkout@v2
         with:
+          repository: ${{ github.repository }}
           path: ./supertokens-root/supertokens-core
+          ref: ${{ github.event.inputs.core-branch }}
       - uses: actions/checkout@v2
         with:
           repository: supertokens/supertokens-plugin-interface
