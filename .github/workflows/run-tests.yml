@@ -1,0 +1,73 @@
+name: Run Core Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      plugin-interface-branch:
+        description: 'plugin-interface branch (default: master)'
+        required: false
+        default: 'master'
+      test-filter:
+        description: 'Optional Gradle test filter, e.g. io.supertokens.test.InMemoryDBTest'
+        required: false
+        default: ''
+  push:
+    branches:
+      - '**'
+
+concurrency:
+  group: run-core-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Core unit tests
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: [sqlite, postgresql]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Set up JDK 21
+        uses: actions/setup-java@v2
+        with:
+          java-version: '21.0.7'
+          distribution: 'zulu'
+      - uses: actions/checkout@v2
+        with:
+          repository: supertokens/supertokens-root
+          path: ./supertokens-root
+          ref: master
+      - uses: actions/checkout@v2
+        with:
+          path: ./supertokens-root/supertokens-core
+      - uses: actions/checkout@v2
+        with:
+          repository: supertokens/supertokens-plugin-interface
+          path: ./supertokens-root/supertokens-plugin-interface
+          ref: ${{ github.event.inputs.plugin-interface-branch || 'master' }}
+      - uses: actions/checkout@v2
+        if: matrix.plugin == 'postgresql'
+        with:
+          repository: supertokens/supertokens-postgresql-plugin
+          path: ./supertokens-root/supertokens-postgresql-plugin
+          ref: master
+      - name: Load Modules
+        run: |
+          cd supertokens-root
+          echo "core,master
+          plugin-interface,${{ github.event.inputs.plugin-interface-branch || 'master' }}
+          ${{ matrix.plugin }}-plugin,master" > modules.txt
+          cat modules.txt
+          ./loadModules
+      - name: Setup test env
+        run: cd supertokens-root && ./utils/setupTestEnv --local
+      - name: Start postgres server
+        if: matrix.plugin == 'postgresql'
+        run: cd supertokens-root/supertokens-postgresql-plugin && ./startDb.sh
+      - name: Run tests
+        env:
+          ST_PLUGIN_NAME: ${{ matrix.plugin }}
+        run: |
+          cd supertokens-root
+          ./gradlew test ${{ github.event.inputs.test-filter && format('--tests {0}', github.event.inputs.test-filter) || '' }}
